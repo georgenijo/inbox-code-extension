@@ -1,0 +1,11 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Inbox Code</title><link rel="stylesheet" href="popup.css"></head><body>
+<header><span class="mark" aria-hidden="true">✉</span><h1>Inbox Code</h1><span id="connection-state" class="badge">Gmail</span></header>
+<main>
+<div class="account-row"><span id="account" title="Connected Gmail account">Connect your Gmail</span><button id="disconnect" class="link" hidden>Disconnect</button></div>
+<button id="connect" class="primary">Connect with Google</button><a id="setup" href="setup.html" target="_blank" hidden>Set up Google sign-in</a>
+<section class="site-row"><div class="site-info"><h2 id="site" title="Current website">Open a login page</h2><p id="site-copy">On by default on HTTPS websites</p></div><button id="site-toggle" class="switch" role="switch" aria-checked="false" aria-label="Suggestions on this site" disabled><span></span></button></section>
+<p id="status" role="status" aria-live="polite"></p>
+<details id="sender-settings"><summary>Sender matching <span id="sender-summary">Automatic</span></summary><p>Matched to this website automatically. Set a different email domain only if needed.</p><form id="sender-form"><label for="sender">Email sender domain</label><div class="input-row"><input id="sender" autocomplete="off" spellcheck="false" placeholder="Automatic"><button id="save-sender" type="submit">Save</button></div></form><button id="reset-sender" class="link">Use automatic matching</button></details>
+<details id="disabled-settings" hidden><summary>Disabled websites <span id="count">0</span></summary><ul id="sites"></ul></details>
+<footer>Local processing · Click to fill</footer>
+</main><script src="popup.js"></script></body></html>

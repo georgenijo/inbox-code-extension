@@ -1,0 +1,5 @@
+{
+  "clientId": "",
+  "webClientId": "",
+  "note": "Supply your own public OAuth client IDs in ignored config.local.json; see docs/SETUP.md."
+}
