@@ -32,17 +32,17 @@ try {
   await chrome.storage.local.set({connected:true,email:'fixture@example.net',sites:{},disabledSites:{}});
   chrome.identity.launchWebAuthFlow=async({url})=>{const u=new URL(url);return chrome.identity.getRedirectURL()+'#'+new URLSearchParams({state:u.searchParams.get('state'),access_token:'fixture-only',expires_in:'3600',token_type:'Bearer',scope:'https://www.googleapis.com/auth/gmail.readonly'});};
   chrome.identity.getAuthToken=async()=>({token:'fixture-only',grantedScopes:['https://www.googleapis.com/auth/gmail.readonly']});
-  globalThis.fixtureMessageId='fixture-message';globalThis.fixtureSender='example.test';globalThis.fixtureFetches=0;
+  globalThis.fixtureMessageId='fixture-message';globalThis.fixtureSender='example.test';globalThis.fixtureFetches=0;globalThis.fixtureAvailable=true;globalThis.fixtureSubject='Your verification code';globalThis.fixtureBody='Your verification code is: 482913.';
   globalThis.fetch=async url=>{
    globalThis.fixtureFetches++;const u=new URL(url); let data;
-   if(u.pathname.endsWith('/messages')) data={messages:[{id:globalThis.fixtureMessageId}]};
-   else if(u.pathname.includes('/messages/')) data={id:globalThis.fixtureMessageId,internalDate:String(Date.now()),labelIds:['INBOX'],payload:{mimeType:'text/plain',headers:[{name:'From',value:`Security <security@${globalThis.fixtureSender}>`},{name:'Subject',value:'Your verification code'},{name:'Authentication-Results',value:`mx.google.com; dmarc=pass header.from=${globalThis.fixtureSender}`}],body:{data:btoa('Your verification code is: 482913.')}}};
+   if(u.pathname.endsWith('/messages')) data={messages:globalThis.fixtureAvailable?[{id:globalThis.fixtureMessageId}]:[]};
+   else if(u.pathname.includes('/messages/')) data={id:globalThis.fixtureMessageId,internalDate:String(Date.now()),labelIds:['INBOX'],payload:{mimeType:'text/plain',headers:[{name:'From',value:`Security <security@${globalThis.fixtureSender}>`},{name:'Subject',value:globalThis.fixtureSubject},{name:'Authentication-Results',value:`mx.google.com; dmarc=pass header.from=${globalThis.fixtureSender}`}],body:{data:btoa(globalThis.fixtureBody)}}};
    else if(u.pathname.endsWith('/profile')) data={emailAddress:'fixture@example.net'};
    else throw new Error('Unexpected fixture request');
    return new Response(JSON.stringify(data),{status:200,headers:{'Content-Type':'application/json'}});
   };
  });
- await context.route(/^https:\/\/(?:example\.test(?::8443)?|other\.test|tenant\.wordpress\.com|example-team\.cloudflareaccess\.com)\//,route=>route.fulfill({contentType:'text/html',body:`<!doctype html><html><head><meta charset="utf-8"><title>Inbox Code integration fixture</title><style>body{background:#edf1ec;font:16px system-ui;color:#20362c;padding:80px}main{background:white;padding:44px;border-radius:20px;width:400px;margin:auto}h1{font-size:26px}input{padding:12px;font:24px system-ui;max-width:260px;border:1px solid #829687;border-radius:8px}fieldset{border:0;padding:0;display:flex;gap:6px}fieldset input{width:22px;padding:10px 8px}p{line-height:1.5;color:#58665b}label{display:block;margin:18px 0 8px}</style></head><body><main><small>INTEGRATION TEST · FIXTURE EMAIL</small><h1>Check your email</h1><p>Enter your verification code to continue.</p><form><label for="code">Verification code</label>${route.request().url().includes('/split')?'<fieldset aria-label="Verification code">'+Array.from({length:6},(_,i)=>`<input aria-label="Code digit ${i+1}" maxlength="1" inputmode="numeric" ${i===0?'autocomplete="one-time-code"':''}>`).join('')+'</fieldset>':'<input id="code" autocomplete="one-time-code" maxlength="6"><label for="coupon">Coupon</label><input id="coupon" maxlength="6">'}<button style="display:block;margin-top:24px" type="submit">Verify</button></form><p id="result"></p><script>document.querySelector('form').onsubmit=e=>{e.preventDefault();document.querySelector('#result').textContent='Submitted'};</script></main></body></html>`}));
+ await context.route(/^https:\/\/(?:example\.test(?::8443)?|other\.test|accounts\.spotify\.com|tenant\.wordpress\.com|example-team\.cloudflareaccess\.com)\//,route=>route.fulfill({contentType:'text/html',body:`<!doctype html><html><head><meta charset="utf-8"><title>Inbox Code integration fixture</title><style>body{background:#edf1ec;font:16px system-ui;color:#20362c;padding:80px}main{background:white;padding:44px;border-radius:20px;width:400px;margin:auto}h1{font-size:26px}input{padding:12px;font:24px system-ui;max-width:260px;border:1px solid #829687;border-radius:8px}fieldset{border:0;padding:0;display:flex;gap:6px}fieldset input{width:22px;padding:10px 8px}p{line-height:1.5;color:#58665b}label{display:block;margin:18px 0 8px}</style></head><body><main><small>INTEGRATION TEST · FIXTURE EMAIL</small><h1>Check your email</h1><p>Enter your verification code to continue.</p><form><label for="code">Verification code</label>${route.request().url().includes('/split')?'<fieldset aria-label="Verification code">'+Array.from({length:6},(_,i)=>`<input aria-label="Code digit ${i+1}" maxlength="1" inputmode="numeric" ${i===0?'autocomplete="one-time-code"':''}>`).join('')+'</fieldset>':'<input id="code" autocomplete="one-time-code" maxlength="6"><label for="coupon">Coupon</label><input id="coupon" maxlength="6">'}<button style="display:block;margin-top:24px" type="submit">Verify</button></form><p id="result"></p><script>document.querySelector('form').onsubmit=e=>{e.preventDefault();document.querySelector('#result').textContent='Submitted'};</script></main></body></html>`}));
  const page=await context.newPage();
  page.on('pageerror',error=>console.log('Page error:',error.message));
  page.on('console',msg=>{if(msg.type()==='error') console.log('Browser error:',msg.text());});
@@ -89,6 +89,35 @@ try {
  assert.equal((await page.locator('input').evaluateAll(inputs=>inputs.map(i=>i.value))).join(''),'482913');passed++;
  assert.equal(await page.locator('#result').textContent(),'');passed++;
  await page.screenshot({path:`artifacts/filled-split-${browserName.toLowerCase()}.png`});
+ // Spotify-style code-first email, split fields and return from another window.
+ await worker.evaluate(()=>{globalThis.fixtureSender='accounts.spotify.com';globalThis.fixtureSubject='482913 - Your Spotify login code';globalThis.fixtureBody='Hi, Enter this code to continue logging in without a password. 482913';globalThis.fixtureAvailable=false;globalThis.fixtureMessageId=crypto.randomUUID();});
+ await page.goto('https://accounts.spotify.com/spotify');
+ await page.evaluate(()=>{
+  document.querySelector('h1').textContent='Enter the code we sent to your email';
+  document.querySelector('form').innerHTML=Array.from({length:6},(_,i)=>`<input aria-label="Code digit ${i+1}" maxlength="1" inputmode="numeric">`).join('')+'<button type="submit">Next</button><input id="other-field" aria-label="Other field">';
+ });
+ const digits=page.locator('input[maxlength="1"]');await digits.first().focus();
+ await page.waitForFunction(()=>Boolean(document.querySelector('inbox-code-suggestion')));
+ assert.equal((await digits.evaluateAll(inputs=>inputs.map(i=>i.value))).join(''),'');passed++;
+ await page.locator('#other-field').focus();assert.equal(await page.locator('inbox-code-suggestion').count(),0);passed++;
+ await digits.first().focus();await page.waitForFunction(()=>Boolean(document.querySelector('inbox-code-suggestion')));passed++;
+ // A window focus return needn't refocus the already-focused input.
+ // Dispatch the DOM window events separately from visibility for deterministic headless coverage.
+ await page.evaluate(()=>window.dispatchEvent(new Event('blur')));
+ assert.equal(await page.locator('inbox-code-suggestion').count(),0);passed++;
+ await worker.evaluate(()=>{globalThis.fixtureAvailable=true;});
+ await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
+ await suggestionNode();assert.equal((await digits.evaluateAll(inputs=>inputs.map(i=>i.value))).join(''),'');passed++;
+ await clickSuggestion();await page.waitForFunction(()=>[...document.querySelectorAll('input[maxlength="1"]')].map(i=>i.value).join('')==='482913');passed++;
+ assert.equal(await page.locator('#result').textContent(),'');passed++;
+ // Switching tabs away and back must also resume an unchanged focused field.
+ await worker.evaluate(()=>{globalThis.fixtureMessageId=crypto.randomUUID();});
+ await page.goto('https://accounts.spotify.com/split');await page.locator('input').first().focus();await suggestionNode();
+ const away=await context.newPage();await away.goto('about:blank');await away.bringToFront();
+ await page.waitForFunction(()=>!document.querySelector('inbox-code-suggestion'));passed++;
+ await page.bringToFront();await suggestionNode();passed++;
+ await away.close();
+ await worker.evaluate(()=>{globalThis.fixtureSender='example.test';globalThis.fixtureSubject='Your verification code';globalThis.fixtureBody='Your verification code is: 482913.';});
  // Existing typed digits must never be replaced.
  await navigate('login');await page.locator('#code').fill('777');
  assert.equal(await page.locator('inbox-code-suggestion').count(),0);passed++;
