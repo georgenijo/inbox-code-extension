@@ -56,6 +56,7 @@ try {
    if(button) return button;
    await page.waitForTimeout(100);
   }
+  console.log('Suggestion timeout', await page.evaluate(()=>({visibility:document.visibilityState,focused:document.hasFocus(),active:document.activeElement?.outerHTML,host:document.querySelector('inbox-code-suggestion')?.outerHTML})));
   throw new Error('No accessible code suggestion appeared');
  }
  async function clickSuggestion({delay=700,keyboard=false}={}) {
@@ -113,10 +114,13 @@ try {
  // Switching tabs away and back must also resume an unchanged focused field.
  await worker.evaluate(()=>{globalThis.fixtureMessageId=crypto.randomUUID();});
  await page.goto('https://accounts.spotify.com/split');await page.locator('input').first().focus();await suggestionNode();
+ // Playwright emulates focus on background pages by default; use real target focus here.
+ await cdp.send('Emulation.setFocusEmulationEnabled',{enabled:false});
  const away=await context.newPage();await away.goto('about:blank');await away.bringToFront();
  await page.waitForFunction(()=>!document.querySelector('inbox-code-suggestion'));passed++;
  await page.bringToFront();await suggestionNode();passed++;
- await away.close();
+ await page.keyboard.press('Escape');await page.evaluate(()=>{window.dispatchEvent(new Event('blur'));window.dispatchEvent(new Event('focus'));});await page.waitForTimeout(200);assert.equal(await page.locator('inbox-code-suggestion').count(),0);passed++;
+ await away.close();await cdp.send('Emulation.setFocusEmulationEnabled',{enabled:true});
  await worker.evaluate(()=>{globalThis.fixtureSender='example.test';globalThis.fixtureSubject='Your verification code';globalThis.fixtureBody='Your verification code is: 482913.';});
  // Existing typed digits must never be replaced.
  await navigate('login');await page.locator('#code').fill('777');

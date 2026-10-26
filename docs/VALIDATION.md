@@ -23,3 +23,5 @@ Screenshots, videos and fixture results from local test runs are written to igno
 - `npm run check`: 50 automated checks pass and build succeeds. New parser checks cover code-first branded authentication subjects, authenticated Spotify-style MIME messages, negative promotional/unrelated formats and ambiguity rejection.
 - Window blur pauses checking and invalidates in-flight results. Returning to a visible, focused window resumes its already-focused OTP input without requiring a fresh field-focus event. Explicit dismissal and site disablement remain respected.
 - Browser regression adds Spotify-style synthetic subject/body with six one-digit fields, focus away/back, deterministic window blur/focus events independent of visibility, and real tab switching. This uses fixture mail only, not a live Spotify or Gmail account.
+
+- Focused independent Claude Opus 5.5 review passed. Browser tab-switch tests disable Playwright’s forced-focus emulation for that case, so the page receives actual visibility/focus transitions. Window-event coverage also checks that explicit Escape dismissal survives a focus round trip.
