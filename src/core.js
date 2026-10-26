@@ -90,9 +90,13 @@ export function extractCode(text) {
   // Require explicit code language next to a bounded token. Never grab arbitrary numbers.
   const value = text.replace(/[\u200B-\u200D\uFEFF]/g, '').replace(/\s+/g, ' ');
   const token = '([0-9]{3}[ -][0-9]{3}|[A-Z0-9]{4,10})';
-  const label = '(?:(?:verification|security|authentication|confirmation|login|sign[ -]?in|one[ -]?time|access) (?:code|password|passcode)|OTP|passcode|code)';
+  const authLabel = '(?:(?:verification|security|authentication|confirmation|login|sign[ -]?in|one[ -]?time|access) (?:code|password|passcode)|OTP|passcode)';
+  const label = `(?:${authLabel}|code)`;
   const patterns = [new RegExp(`\\b${label}\\b(?: is(?: below)?|:| =| reads)?[ :\\-]*${token}\\b`, 'gi'),
-    new RegExp(`\\b${token}[ :\\-]+is your ${label}\\b`, 'gi')];
+    new RegExp(`\\b${token}[ :\\-]+is your ${label}\\b`, 'gi'),
+    // Subject-first codes, e.g. "482913 - Your Spotify login code".
+    // Anchor at the start and require authentication language, not a bare code.
+    new RegExp(`^${token}\\b[ :\\-–—|]+your (?:[A-Z][A-Z0-9&.'-]{0,31} ){0,4}${authLabel}\\b`, 'gi')];
   const found = new Set();
   for (const pattern of patterns) for (const match of value.matchAll(pattern)) {
     if (/\b(?:zip|postal|promo|coupon|discount) $/i.test(value.slice(Math.max(0, match.index - 16), match.index))) continue;

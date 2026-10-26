@@ -98,3 +98,16 @@ test('shared-content hosts never inherit their platform email domain automatical
  assert.equal(defaultSender('https://docs.google.com.attacker.net'),'attacker.net');
  assert.equal(defaultSender('https://tenant.squarespace.com.attacker.net'),'attacker.net');
 });
+
+test('recognizes branded authentication subjects with the code first',()=>{
+ for(const subject of ['482913 - Your Spotify login code','482913 – Your Spotify login code','482913 — Your Example Service sign-in code','AB12CD: Your Example authentication code']) assert.equal(extractCode(subject),subject.startsWith('AB12CD')?'AB12CD':'482913',subject);
+});
+test('prefixed subjects still reject promotional, unrelated and ambiguous numbers',()=>{
+ for(const text of ['482913 - Your Spotify promo code','482913 - Your Example coupon code','Order 482913 - Your Spotify login code','482913 - Your Spotify login code. Backup code: 654321','482913 - Your Spotify code','12345678901 - Your Spotify login code']) assert.equal(extractCode(text),null,text);
+});
+test('Spotify-style subject survives authenticated Gmail/MIME processing',()=>{
+ const item=message();item.payload={mimeType:'text/html',headers:[{name:'From',value:'Spotify <no-reply@accounts.spotify.com>'},{name:'Subject',value:'482913 - Your Spotify login code'},{name:'Authentication-Results',value:'mx.google.com; dmarc=pass header.from=accounts.spotify.com'}],body:{data:Buffer.from('<p>Hi,</p><p>Enter this code to continue logging in without a password.</p><strong>482913</strong>').toString('base64url')}};
+ assert.equal(candidateFromMessage(item,'spotify.com',now)?.code,'482913');
+ assert.equal(candidateFromMessage(item,'example.com',now),null);
+ item.payload.headers[2].value='mx.google.com; dmarc=fail header.from=accounts.spotify.com';assert.equal(candidateFromMessage(item,'spotify.com',now),null);
+});

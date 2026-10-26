@@ -2,7 +2,7 @@
   if (globalThis.__inboxCodeLoaded) return;
   globalThis.__inboxCodeLoaded = true;
   let lastMoved = 0, lastPosition = '', visibilityObserver, suggestionVisible = false, expectedRect;
-  let siteEnabled = true, siteEpoch = 0;
+  let siteEnabled = true, watchEpoch = 0, windowPaused = !document.hasFocus();
   let target, host, root, timer, busy = false, dismissed, began = 0, lastRender = '', currentCandidates = [];
   const ignored = /password|email|phone|coupon|promo|postal|zip|credit|card|search/i;
   const hint = /one.?time|verif|otp|auth.?code|security.?code|passcode|confirmation.?code|login.?code|sign.?in.?code/i;
@@ -46,17 +46,17 @@
     expectedRect = host.getBoundingClientRect();
   }
   async function fill(candidate, event) {
-    if (!siteEnabled || !event.isTrusted || !target || !isOtp(target) || candidate.expiresAt <= Date.now() || document.visibilityState !== 'visible') return;
+    if (!siteEnabled || windowPaused || !document.hasFocus() || !event.isTrusted || !target || !isOtp(target) || candidate.expiresAt <= Date.now() || document.visibilityState !== 'visible') return;
     const actualRect = host?.getBoundingClientRect();
     if (!actualRect || !expectedRect || ['x','y','width','height'].some(key => Math.abs(actualRect[key] - expectedRect[key]) > 1)) return;
     if (Date.now() - lastMoved < 600 || !suggestionVisible) return;
     const keyboard = event.detail === 0 && root.activeElement === event.currentTarget;
     if (!keyboard && (document.elementFromPoint(event.clientX, event.clientY) !== host || root.elementFromPoint(event.clientX, event.clientY)?.closest('button.code') !== event.currentTarget)) return;
     for (let element = host; element; element = element.parentElement) if (Number(getComputedStyle(element).opacity) < 1) return;
-    const clickedTarget = target, clickedEpoch = siteEpoch;
+    const clickedTarget = target, clickedEpoch = watchEpoch;
     let permission;
     try { permission = await chrome.runtime.sendMessage({ type: 'CONSUME', id: candidate.id }); } catch { clear(); return; }
-    if (!siteEnabled || clickedEpoch !== siteEpoch || !permission?.ok || !permission.candidate || permission.candidate.code !== candidate.code || clickedTarget !== target || !isOtp(target) || document.visibilityState !== 'visible') { clear(); return; }
+    if (!siteEnabled || windowPaused || !document.hasFocus() || clickedEpoch !== watchEpoch || !permission?.ok || !permission.candidate || permission.candidate.code !== candidate.code || clickedTarget !== target || !isOtp(target) || document.visibilityState !== 'visible') { clear(); return; }
     const inputs = group(target);
     if (inputs.some(el => el.value)) return;
     if (inputs.length > 1 && inputs.length !== candidate.code.length) return;
@@ -104,7 +104,7 @@
   }
   async function poll() {
     clearTimeout(timer);
-    if (!siteEnabled || !target?.isConnected || target === dismissed || group(target).some(i => i.value) || document.visibilityState !== 'visible') { clear(); return; }
+    if (!siteEnabled || windowPaused || !document.hasFocus() || !target?.isConnected || target === dismissed || group(target).some(i => i.value) || document.visibilityState !== 'visible') { clear(); return; }
     if (!isOtp(target)) {
       clear();
       if (Date.now() - began < 5 * 60_000) timer = setTimeout(poll, 5_000);
@@ -113,10 +113,10 @@
     if (Date.now() - began > 5 * 60_000) { render([], 'Still waiting? Focus the field again to check Gmail.'); return; }
     if (busy) { timer = setTimeout(poll, 1000); return; }
     busy = true;
-    const requestedTarget = target, requestedEpoch = siteEpoch;
+    const requestedTarget = target, requestedEpoch = watchEpoch;
     try {
       const result = await chrome.runtime.sendMessage({ type: 'POLL' });
-      if (!siteEnabled || requestedEpoch !== siteEpoch || requestedTarget !== target || target === dismissed || !isOtp(target) || group(target).some(i => i.value) || document.visibilityState !== 'visible') return;
+      if (!siteEnabled || windowPaused || !document.hasFocus() || requestedEpoch !== watchEpoch || requestedTarget !== target || target === dismissed || !isOtp(target) || group(target).some(i => i.value) || document.visibilityState !== 'visible') return;
       if (!result?.ok) {
         if (['DENIED', 'INVALID'].includes(result?.code)) { if (result.code === 'DENIED') siteEnabled = false; clear(); return; }
         render([], result?.error ?? 'Open Inbox Code to reconnect.');
@@ -126,21 +126,39 @@
         render(candidates, `Waiting for a code from ${result.senderDomain}…`);
       }
       timer = setTimeout(poll, 5_000);
-    } catch { if (siteEnabled && requestedEpoch === siteEpoch) render([], 'Open Inbox Code to reconnect.'); }
+    } catch { if (siteEnabled && !windowPaused && document.hasFocus() && requestedEpoch === watchEpoch) render([], 'Open Inbox Code to reconnect.'); }
     finally { busy = false; }
   }
+  function pauseWindow() {
+    windowPaused = true; ++watchEpoch; clear();
+  }
+  function resumeWindow() {
+    if (document.visibilityState !== 'visible' || !document.hasFocus()) return;
+    windowPaused = false;
+    const active = document.activeElement;
+    if (isOtp(active)) {
+      if (target !== active) { ++watchEpoch; dismissed = undefined; }
+      target = active;
+    } else if (active !== host || !target || !isOtp(target)) { target = undefined; clear(); return; }
+    // Returning to an already-focused field doesn't always dispatch focusin.
+    // Keep an explicit dismissal, but start a fresh watch for a real return.
+    if (target === dismissed) return;
+    began = Date.now(); poll();
+  }
+  addEventListener('blur', pauseWindow);
+  addEventListener('focus', resumeWindow);
   document.addEventListener('focusin', event => {
     if (event.composedPath().includes(host)) return;
-    if (!isOtp(event.target)) { target = undefined; clear(); return; }
-    if (target !== event.target) { dismissed = undefined; clear(); }
-    target = event.target; began = Date.now(); poll();
+    if (!isOtp(event.target)) { ++watchEpoch; target = undefined; clear(); return; }
+    if (target !== event.target) { ++watchEpoch; dismissed = undefined; clear(); }
+    windowPaused = !document.hasFocus(); target = event.target; began = Date.now(); poll();
   });
   document.addEventListener('input', event => { if (target && group(target).includes(event.target)) { if (group(target).some(i => i.value)) clear(); else poll(); } });
   document.addEventListener('keydown', event => { if (event.key === 'Escape') { dismissed = target; clear(); } });
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') clear(); else if (target) poll(); });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') pauseWindow(); else resumeWindow(); });
   chrome.runtime.onMessage.addListener((message, sender) => {
     if (sender.id !== chrome.runtime.id || sender.tab || message?.type !== 'SITE_CHANGED') return;
-    ++siteEpoch; siteEnabled = message.enabled === true; clear();
+    ++watchEpoch; siteEnabled = message.enabled === true; clear();
     if (siteEnabled && target) { dismissed = undefined; began = Date.now(); poll(); }
   });
   chrome.storage.onChanged.addListener((changes, area) => {

@@ -16,7 +16,7 @@ await build({ entryPoints: ['src/background.js','src/content.js','src/popup.js']
 await cp('src/icons','dist/icons',{recursive:true});
 for (const name of ['popup.html','popup.css','setup.html','setup.js']) await copyFile(`src/${name}`, `dist/${name}`);
 const manifest = {
-  manifest_version: 3, name: 'Inbox Code', version: '0.2.0', minimum_chrome_version: '120',
+  manifest_version: 3, name: 'Inbox Code', version: '0.2.1', minimum_chrome_version: '120',
   description: 'Gmail verification codes beside your login field. Local processing, sender matching, and click-to-fill.',
   icons: { 16:'icons/16.png',32:'icons/32.png',48:'icons/48.png',128:'icons/128.png' },
   key, permissions: ['identity','storage','activeTab','scripting'],
